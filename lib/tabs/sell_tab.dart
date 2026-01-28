@@ -17,6 +17,7 @@ import '../views/location_picker_screen.dart';
 import '../views/pet_details.dart';
 import '../widgets/responsive_tiles.dart';
 import '../widgets/pet_image.dart';
+import '../services/pet_backend.dart';
 
 class SellTab extends StatefulWidget {
   final PetCatalogItem? initial;
@@ -119,7 +120,8 @@ class _SellTabState extends State<SellTab> {
   LocationSelectionResult? _locationFromMap;
   PetStatus? _petStatusFilter;
   bool get _isReadOnlyFilter =>
-      _petStatusFilter == PetStatus.sold || _petStatusFilter == PetStatus.deleted;
+      _petStatusFilter == PetStatus.sold ||
+      _petStatusFilter == PetStatus.deleted;
 
   DateTime? _availableFrom;
   static const Set<String> _noVaccineCategories = {'Birds', 'Fish', 'Reptiles'};
@@ -180,6 +182,7 @@ class _SellTabState extends State<SellTab> {
     if (confirm != true) return;
     final updated = pet.copyWith(status: PetStatus.deleted);
     await PetCatalog.upsertAndSave(updated, previousTitle: pet.title);
+    await _syncBackendDelete(pet.title);
     if (!mounted) return;
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
@@ -216,6 +219,7 @@ class _SellTabState extends State<SellTab> {
     return NumberFormat.compactCurrency(symbol: 'Rs ', decimalDigits: 0)
         .format(pet.price);
   }
+
   String _locationLabel(PetCatalogItem pet) {
     final loc = pet.location.trim();
     return loc.isEmpty ? 'Location not set' : loc;
@@ -419,10 +423,10 @@ class _SellTabState extends State<SellTab> {
     }
   }
 
-  Future<void> _updatePetStatus(
-      PetCatalogItem pet, PetStatus status) async {
+  Future<void> _updatePetStatus(PetCatalogItem pet, PetStatus status) async {
     final updated = pet.copyWith(status: status);
     await PetCatalog.upsertAndSave(updated, previousTitle: pet.title);
+    await _syncBackendSave(updated, previousTitle: pet.title);
     if (!mounted) return;
     setState(() {});
   }
@@ -513,7 +517,6 @@ class _SellTabState extends State<SellTab> {
     }
   }
 
-  
   (String, String) _parseTitle(String title) {
     final normalized = normalizePetTitle(title);
     final (pet, breed) = splitPetTitle(normalized);
@@ -521,7 +524,6 @@ class _SellTabState extends State<SellTab> {
     if (breed.isEmpty || breed == pet) return (pet, '');
     return (pet, breed);
   }
-
 
   bool _containsIgnoreCase(Iterable<String> values, String value) {
     final target = value.trim().toLowerCase();
@@ -561,8 +563,8 @@ class _SellTabState extends State<SellTab> {
                     catKey.toString(), () => <String, Set<String>>{});
                 subValue.forEach((subKey, breedList) {
                   if (breedList is List) {
-                    final set = subMap.putIfAbsent(
-                        subKey.toString(), () => <String>{});
+                    final set =
+                        subMap.putIfAbsent(subKey.toString(), () => <String>{});
                     set.addAll(breedList
                         .map((e) => e.toString().trim())
                         .where((e) => e.isNotEmpty));
@@ -642,7 +644,8 @@ class _SellTabState extends State<SellTab> {
         values.addAll(entry);
       }
     } else {
-      values.addAll(_customSubCategoriesByCategory[category] ?? const <String>{});
+      values
+          .addAll(_customSubCategoriesByCategory[category] ?? const <String>{});
       values.addAll(_customSubCategoriesByCategory['All'] ?? const <String>{});
     }
     final list = values.toList()..sort();
@@ -723,8 +726,6 @@ class _SellTabState extends State<SellTab> {
         .where((item) => item != 'All' && item != 'Other');
     return _containsIgnoreCase(options, value);
   }
-
-
 
   List<String> _subCategoriesFor(String category) {
     final base = category == 'All'
@@ -857,8 +858,9 @@ class _SellTabState extends State<SellTab> {
         return;
       }
       final submittedSub = result.subCategory?.trim() ?? '';
-      final targetSub =
-          submittedSub.isNotEmpty ? submittedSub : (hasSubSelection ? prevSub : '');
+      final targetSub = submittedSub.isNotEmpty
+          ? submittedSub
+          : (hasSubSelection ? prevSub : '');
       if (targetSub.isEmpty) {
         setState(() {
           _breed = prevBreed;
@@ -936,9 +938,7 @@ class _SellTabState extends State<SellTab> {
                   child: Text(
                     'Custom entries are saved for you and shown in red.',
                     style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 13,
-                        height: 1.3),
+                        color: Colors.grey.shade600, fontSize: 13, height: 1.3),
                   ),
                 ),
               ],
@@ -1272,8 +1272,7 @@ class _SellTabState extends State<SellTab> {
   Future<void> _saveSnapshotToPrefs(_FormSnapshot snapshot) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-          _snapshotPrefsKey, jsonEncode(snapshot.toJson()));
+      await prefs.setString(_snapshotPrefsKey, jsonEncode(snapshot.toJson()));
     } catch (_) {
       // Ignore persistence errors; UI will still reflect in-memory snapshot
     }
@@ -1335,8 +1334,8 @@ class _SellTabState extends State<SellTab> {
       _videos
         ..clear()
         ..addAll(snapshot.localVideos.map((path) => XFile(path)));
-      _mediaPageIndex = snapshot.mediaPageIndex.clamp(
-          0, _mediaCount == 0 ? 0 : _mediaCount - 1);
+      _mediaPageIndex = snapshot.mediaPageIndex
+          .clamp(0, _mediaCount == 0 ? 0 : _mediaCount - 1);
     });
 
     _ensureValidSelections(allowUnknownCustoms: !_customOptionsLoaded);
@@ -1354,11 +1353,9 @@ class _SellTabState extends State<SellTab> {
     _breedCtrl.text = snapshot.textFields['breed'] ?? '';
     _pairCountCtrl.text = snapshot.textFields['pairCount'] ?? '';
     _groupMaleCountCtrl.text = snapshot.textFields['groupMaleCount'] ?? '';
-    _groupFemaleCountCtrl.text =
-        snapshot.textFields['groupFemaleCount'] ?? '';
+    _groupFemaleCountCtrl.text = snapshot.textFields['groupFemaleCount'] ?? '';
     _groupMalePriceCtrl.text = snapshot.textFields['groupMalePrice'] ?? '';
-    _groupFemalePriceCtrl.text =
-        snapshot.textFields['groupFemalePrice'] ?? '';
+    _groupFemalePriceCtrl.text = snapshot.textFields['groupFemalePrice'] ?? '';
     _vaccineDetailsCtrl.text = snapshot.textFields['vaccineDetails'] ?? '';
 
     _animatePagerTo(_mediaPageIndex);
@@ -1379,8 +1376,9 @@ class _SellTabState extends State<SellTab> {
     final subOptions = _subCategoriesFor(_category);
     final missingSub = !subOptions.contains(_subCategory);
     if (missingSub && subOptions.isNotEmpty) {
-      final waitForCustoms =
-          allowUnknownCustoms && !_customOptionsLoaded && _subCategory.isNotEmpty;
+      final waitForCustoms = allowUnknownCustoms &&
+          !_customOptionsLoaded &&
+          _subCategory.isNotEmpty;
       if (!waitForCustoms) {
         _subCategory = subOptions.first;
         _subCategoryCtrl.text = _subCategory;
@@ -1409,7 +1407,8 @@ class _SellTabState extends State<SellTab> {
     final current = Session.currentUser;
     final phoneDigits = current.phone.replaceAll(RegExp(r'[^0-9]'), '');
     return PetCatalog.all.where((p) {
-      final nameMatch = p.sellerName.toLowerCase() == current.name.toLowerCase();
+      final nameMatch =
+          p.sellerName.toLowerCase() == current.name.toLowerCase();
       final sellerDigits = p.phone.replaceAll(RegExp(r'[^0-9]'), '');
       final phoneMatch = phoneDigits.isNotEmpty && sellerDigits == phoneDigits;
       return nameMatch || phoneMatch;
@@ -1420,6 +1419,37 @@ class _SellTabState extends State<SellTab> {
     if (_isAdmin || widget.initial != null) return true;
     if (_ownedPetCount() < _maxListings) return true;
     return await requirePlanPoints(context, PlanAction.addPet);
+  }
+
+  Future<void> _syncBackendSave(PetCatalogItem pet,
+      {String? previousTitle}) async {
+    final backend = const PetBackend();
+    if (!backend.isConfigured) return;
+    try {
+      await backend.upsert(pet, previousTitle: previousTitle);
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Saved locally but sync to server failed: ${err.toString()}')),
+      );
+    }
+  }
+
+  Future<void> _syncBackendDelete(String title) async {
+    final backend = const PetBackend();
+    if (!backend.isConfigured) return;
+    try {
+      await backend.delete(title);
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Removed locally but server delete failed: ${err.toString()}')),
+      );
+    }
   }
 
   Future<void> _pickDate() async {
@@ -1457,8 +1487,8 @@ class _SellTabState extends State<SellTab> {
         context: context,
         builder: (_) => AlertDialog(
           title: const Text('Update listing?'),
-          content: const Text(
-              'This will update the existing post for this pet.'),
+          content:
+              const Text('This will update the existing post for this pet.'),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -1572,6 +1602,7 @@ class _SellTabState extends State<SellTab> {
     _saveSnapshotToPrefs(snapshot);
     await PetCatalog.upsertAndSave(updatedPet,
         previousTitle: widget.initial?.title);
+    await _syncBackendSave(updatedPet, previousTitle: widget.initial?.title);
 
     if (widget.onSaved != null) {
       widget.onSaved!(updatedPet);
@@ -1636,7 +1667,6 @@ class _SellTabState extends State<SellTab> {
       ),
     );
   }
-
 
   bool _termsAccepted = false;
   bool _showForm = false;
@@ -1760,8 +1790,8 @@ class _SellTabState extends State<SellTab> {
                 icon: const Icon(Icons.add, color: Colors.white),
                 label: const Text(
                   'Add Pet',
-                  style:
-                      TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w700, color: Colors.white),
                 ),
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 shape: RoundedRectangleBorder(
@@ -1798,7 +1828,7 @@ class _SellTabState extends State<SellTab> {
       body: NestedScrollView(
         controller: _scrollController,
         floatHeaderSlivers: true,
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
           _floatingHeader(
             showBack: true,
             showAdd: false,
@@ -1810,611 +1840,620 @@ class _SellTabState extends State<SellTab> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
             children: [
-            _SectionCard(
-              title: 'Photos & videos',
-              child: _buildMediaSection(subtitleStyle),
-            ),
-
-            // Basic info
-            _SectionCard(
-              title: 'Basic Info',
-              trailing: IconButton(
-                tooltip: 'Search catalog',
-                icon: const Icon(Icons.search),
-                onPressed: _openCatalogSearch,
+              _SectionCard(
+                title: 'Photos & videos',
+                child: _buildMediaSection(subtitleStyle),
               ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _DropdownTile<String>(
-                          label: 'Category',
-                          value: _category,
-                          items: _categoryOptions,
-                          onChanged: _onCategoryChanged,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                       child: _DropdownTile<String>(
-                         label: 'Sub category',
-                         value: _subCategory,
-                         items: _subCategoriesFor(_category),
-                          onChanged: _onSubCategorySelected,
-                          isHighlighted: (val) =>
-                              _isCustomSubCategory(_category, val),
-                          itemBuilder: (val) => val == 'Other'
-                              ? Row(
-                                  children: const [
-                                    Icon(Icons.add_circle_outline, size: 18),
-                                    SizedBox(width: 6),
-                                    Text('Other'),
-                                  ],
-                                )
-                              : Text(val),
-                       ),
-                     ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                       child: _DropdownTile<String>(
-                         label: 'Breed',
-                         value: _breed,
-                         items: _breedsForSelection(_category, _subCategory),
-                          onChanged: _onBreedSelected,
-                          isHighlighted: (val) =>
-                              _isCustomBreed(_category, _subCategory, val),
-                          itemBuilder: (val) => val == 'Other'
-                              ? Row(
-                                  children: const [
-                                    Icon(Icons.add_circle_outline, size: 18),
-                                    SizedBox(width: 6),
-                                    Text('Other'),
-                                  ],
-                                )
-                              : Text(val),
-                       ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _colorCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Color (optional)',
-                            hintText: 'e.g. Brown / White',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Text(
-                        'Age',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 70,
-                        child: TextFormField(
-                          controller: _ageYearsCtrl,
-                          keyboardType: TextInputType.number,
-                          maxLength: 2,
-                          decoration: const InputDecoration(
-                            labelText: 'Years',
-                            hintText: '03',
-                            counterText: '',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      SizedBox(
-                        width: 70,
-                        child: TextFormField(
-                          controller: _ageMonthsCtrl,
-                          keyboardType: TextInputType.number,
-                          maxLength: 2,
-                          autovalidateMode: AutovalidateMode.onUserInteraction,
-                          decoration: const InputDecoration(
-                            labelText: 'Months',
-                            hintText: '05',
-                            counterText: '',
-                          ),
-                          validator: (value) {
-                            final text = value?.trim();
-                            if (text == null || text.isEmpty) return null;
-                            final parsed = int.tryParse(text);
-                            if (parsed == null || parsed < 0) {
-                              return 'Invalid';
-                            }
-                            if (parsed > 11) {
-                              return 'Months can\'t exceed 11';
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      IconButton(
-                        tooltip: _dateOfBirth == null
-                            ? 'Select date of birth'
-                            : 'DOB: ${DateFormat('dd MMM yyyy').format(_dateOfBirth!)}',
-                        onPressed: _pickDob,
-                        icon: const Icon(Icons.cake_outlined),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _DropdownTile<String>(
-                    label: 'Count',
-                    value: _countType,
-                    items: _countOptions,
-                    onChanged: (value) {
-                      final selected = value ?? 'Single';
-                      setState(() {
-                        _countType = selected;
-                        if (selected != 'Pair') {
-                          _pairCountCtrl.clear();
-                        }
-                      });
-                    },
-                  ),
-                  if (_isPair) ...[
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _pairCountCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Number of pairs',
-                        hintText: 'For ex: 2',
-                      ),
-                      validator: (value) {
-                        if (!_isPair) return null;
-                        final parsed = int.tryParse((value ?? '').trim());
-                        if (parsed == null || parsed <= 0) {
-                          return 'Enter valid count';
-                        }
-                        return null;
-                      },
-                      onChanged: (_) => setState(() {}),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Pair totaprice: ₹$_pairTotalPrice',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                  if (_showGenderCountFields) ...[
-                    const SizedBox(height: 12),
+
+              // Basic info
+              _SectionCard(
+                title: 'Basic Info',
+                trailing: IconButton(
+                  tooltip: 'Search catalog',
+                  icon: const Icon(Icons.search),
+                  onPressed: _openCatalogSearch,
+                ),
+                child: Column(
+                  children: [
                     Row(
                       children: [
                         Expanded(
-                          child: TextFormField(
-                            controller: _groupMaleCountCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Male count',
-                            ),
-                            validator: (value) {
-                              if (!_showGenderCountFields) return null;
-                              final parsed = int.tryParse((value ?? '').trim());
-                              if (parsed == null || parsed < 0) {
-                                return 'Enter valid count';
-                              }
-                              return null;
-                            },
-                            onChanged: (_) => setState(() {}),
+                          child: _DropdownTile<String>(
+                            label: 'Category',
+                            value: _category,
+                            items: _categoryOptions,
+                            onChanged: _onCategoryChanged,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
-                            controller: _groupFemaleCountCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Female count',
-                            ),
-                            validator: (value) {
-                              if (!_showGenderCountFields) return null;
-                              final parsed = int.tryParse((value ?? '').trim());
-                              if (parsed == null || parsed < 0) {
-                                return 'Enter valid count';
-                              }
-                              return null;
-                            },
-                            onChanged: (_) => setState(() {}),
+                          child: _DropdownTile<String>(
+                            label: 'Sub category',
+                            value: _subCategory,
+                            items: _subCategoriesFor(_category),
+                            onChanged: _onSubCategorySelected,
+                            isHighlighted: (val) =>
+                                _isCustomSubCategory(_category, val),
+                            itemBuilder: (val) => val == 'Other'
+                                ? Row(
+                                    children: const [
+                                      Icon(Icons.add_circle_outline, size: 18),
+                                      SizedBox(width: 6),
+                                      Text('Other'),
+                                    ],
+                                  )
+                                : Text(val),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Total pets: $_groupTotalPets',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (_isSingle) ...[
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
                           child: _DropdownTile<String>(
-                            label: 'Gender',
-                            value: _gender,
-                            items: const ['Male', 'Female', 'Unknown'],
-                            onChanged: (v) => setState(() => _gender = v!),
+                            label: 'Breed',
+                            value: _breed,
+                            items: _breedsForSelection(_category, _subCategory),
+                            onChanged: _onBreedSelected,
+                            isHighlighted: (val) =>
+                                _isCustomBreed(_category, _subCategory, val),
+                            itemBuilder: (val) => val == 'Other'
+                                ? Row(
+                                    children: const [
+                                      Icon(Icons.add_circle_outline, size: 18),
+                                      SizedBox(width: 6),
+                                      Text('Other'),
+                                    ],
+                                  )
+                                : Text(val),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: TextFormField(
-                            controller: _weightCtrl,
-                            keyboardType: TextInputType.number,
+                            controller: _colorCtrl,
                             decoration: const InputDecoration(
-                              labelText: 'Weight (kg)',
+                              labelText: 'Color (optional)',
+                              hintText: 'e.g. Brown / White',
                             ),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                  const SizedBox(height: 12),
-                  ResponsiveTileRow(
-                    children: [
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text(
+                          'Age',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 70,
+                          child: TextFormField(
+                            controller: _ageYearsCtrl,
+                            keyboardType: TextInputType.number,
+                            maxLength: 2,
+                            decoration: const InputDecoration(
+                              labelText: 'Years',
+                              hintText: '03',
+                              counterText: '',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 70,
+                          child: TextFormField(
+                            controller: _ageMonthsCtrl,
+                            keyboardType: TextInputType.number,
+                            maxLength: 2,
+                            autovalidateMode:
+                                AutovalidateMode.onUserInteraction,
+                            decoration: const InputDecoration(
+                              labelText: 'Months',
+                              hintText: '05',
+                              counterText: '',
+                            ),
+                            validator: (value) {
+                              final text = value?.trim();
+                              if (text == null || text.isEmpty) return null;
+                              final parsed = int.tryParse(text);
+                              if (parsed == null || parsed < 0) {
+                                return 'Invalid';
+                              }
+                              if (parsed > 11) {
+                                return 'Months can\'t exceed 11';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton(
+                          tooltip: _dateOfBirth == null
+                              ? 'Select date of birth'
+                              : 'DOB: ${DateFormat('dd MMM yyyy').format(_dateOfBirth!)}',
+                          onPressed: _pickDob,
+                          icon: const Icon(Icons.cake_outlined),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _DropdownTile<String>(
+                      label: 'Count',
+                      value: _countType,
+                      items: _countOptions,
+                      onChanged: (value) {
+                        final selected = value ?? 'Single';
+                        setState(() {
+                          _countType = selected;
+                          if (selected != 'Pair') {
+                            _pairCountCtrl.clear();
+                          }
+                        });
+                      },
+                    ),
+                    if (_isPair) ...[
+                      const SizedBox(height: 12),
                       TextFormField(
-                        controller: _sizeCtrl,
+                        controller: _pairCountCtrl,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Size (Approx.)', //≈
-                          hintText: 'For example 5.5',
+                          labelText: 'Number of pairs',
+                          hintText: 'For ex: 2',
                         ),
-                      ),
-                      _DropdownTile<String>(
-                        label: 'Unit',
-                        value: _sizeUnit,
-                        items: _sizeUnits,
-                        onChanged: (value) =>
-                            setState(() => _sizeUnit = value ?? 'cm'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ), // Pricing
-            _SectionCard(
-              title: 'Pricing',
-              child: Column(
-                children: [
-                  ResponsiveTileRow(
-                    children: [
-                      TextFormField(
-                        controller: _priceCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: 'Base price (₹)',
-                          hintText: 'For ex: 12000',
-                        ),
-                        validator: (v) {
-                          final n = int.tryParse((v ?? '').trim());
-                          if (n == null || n <= 0) {
-                            return 'Enter a valid price';
+                        validator: (value) {
+                          if (!_isPair) return null;
+                          final parsed = int.tryParse((value ?? '').trim());
+                          if (parsed == null || parsed <= 0) {
+                            return 'Enter valid count';
                           }
                           return null;
                         },
                         onChanged: (_) => setState(() {}),
                       ),
-                      SwitchListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('Negotiable'),
-                        value: _negotiable,
-                        onChanged: (v) => setState(() => _negotiable = v),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Pair totaprice: ₹$_pairTotalPrice',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ],
-                  ),
-                  if (_isPair) ...[
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Pair total price: ₹$_pairTotalPrice',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                    if (_showGenderCountFields) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _groupMaleCountCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Male count',
+                              ),
+                              validator: (value) {
+                                if (!_showGenderCountFields) return null;
+                                final parsed =
+                                    int.tryParse((value ?? '').trim());
+                                if (parsed == null || parsed < 0) {
+                                  return 'Enter valid count';
+                                }
+                                return null;
+                              },
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _groupFemaleCountCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Female count',
+                              ),
+                              validator: (value) {
+                                if (!_showGenderCountFields) return null;
+                                final parsed =
+                                    int.tryParse((value ?? '').trim());
+                                if (parsed == null || parsed < 0) {
+                                  return 'Enter valid count';
+                                }
+                                return null;
+                              },
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Total pets: $_groupTotalPets',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (_isSingle) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DropdownTile<String>(
+                              label: 'Gender',
+                              value: _gender,
+                              items: const ['Male', 'Female', 'Unknown'],
+                              onChanged: (v) => setState(() => _gender = v!),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _weightCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Weight (kg)',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    ResponsiveTileRow(
+                      children: [
+                        TextFormField(
+                          controller: _sizeCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Size (Approx.)', //≈
+                            hintText: 'For example 5.5',
+                          ),
+                        ),
+                        _DropdownTile<String>(
+                          label: 'Unit',
+                          value: _sizeUnit,
+                          items: _sizeUnits,
+                          onChanged: (value) =>
+                              setState(() => _sizeUnit = value ?? 'cm'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ), // Pricing
+              _SectionCard(
+                title: 'Pricing',
+                child: Column(
+                  children: [
+                    ResponsiveTileRow(
+                      children: [
+                        TextFormField(
+                          controller: _priceCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Base price (₹)',
+                            hintText: 'For ex: 12000',
+                          ),
+                          validator: (v) {
+                            final n = int.tryParse((v ?? '').trim());
+                            if (n == null || n <= 0) {
+                              return 'Enter a valid price';
+                            }
+                            return null;
+                          },
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        SwitchListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Negotiable'),
+                          value: _negotiable,
+                          onChanged: (v) => setState(() => _negotiable = v),
+                        ),
+                      ],
+                    ),
+                    if (_isPair) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Pair total price: ₹$_pairTotalPrice',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                    if (_isGroup) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _groupMalePriceCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Male price / pet (?)',
+                              ),
+                              validator: (value) {
+                                if (!_isGroup) return null;
+                                final parsed =
+                                    int.tryParse((value ?? '').trim());
+                                if (parsed == null || parsed <= 0) {
+                                  return 'Enter valid price';
+                                }
+                                return null;
+                              },
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _groupFemalePriceCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Female price / pet (?)',
+                              ),
+                              validator: (value) {
+                                if (!_isGroup) return null;
+                                final parsed =
+                                    int.tryParse((value ?? '').trim());
+                                if (parsed == null || parsed <= 0) {
+                                  return 'Enter valid price';
+                                }
+                                return null;
+                              },
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Total pets: $_groupTotalPets'),
+                            Text(
+                              'Group total price: ?$_groupTotalPrice',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ), // Health & features
+              _SectionCard(
+                title: 'Health & Features',
+                child: Column(
+                  children: [
+                    if (_showVaccinationFields)
+                      Column(
+                        children: [
+                          _BoolRow(
+                            left: SwitchListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Vaccinated'),
+                              value: _vaccinated,
+                              onChanged: (v) => setState(() => _vaccinated = v),
+                            ),
+                            right: SwitchListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: const Text('Dewormed'),
+                              value: _dewormed,
+                              onChanged: (v) => setState(() => _dewormed = v),
+                            ),
+                          ),
+                          if (_vaccinated) ...[
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              controller: _vaccineDetailsCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Vaccine details',
+                                hintText: 'Type, date, batch, vet, etc.',
+                              ),
+                              maxLines: 2,
+                            ),
+                          ],
+                        ],
+                      ),
+                    _BoolRow(
+                      left: SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Trained'),
+                        value: _trained,
+                        onChanged: (v) => setState(() => _trained = v),
+                      ),
+                      right: SwitchListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Delivery available'),
+                        value: _deliveryAvailable,
+                        onChanged: (v) =>
+                            setState(() => _deliveryAvailable = v),
                       ),
                     ),
                   ],
-                  if (_isGroup) ...[
-                    const SizedBox(height: 12),
+                ),
+              ),
+
+              // Location
+              _SectionCard(
+                title: 'Location',
+                subtitle: 'Pick on the map to auto-fill details',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Expanded(
-                          child: TextFormField(
-                            controller: _groupMalePriceCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Male price / pet (?)',
-                            ),
-                            validator: (value) {
-                              if (!_isGroup) return null;
-                              final parsed = int.tryParse((value ?? '').trim());
-                              if (parsed == null || parsed <= 0) {
-                                return 'Enter valid price';
-                              }
-                              return null;
+                          child: _DropdownTile<String>(
+                            label: 'City / District',
+                            value: _location,
+                            items: _locationOptions,
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() => _location = v);
                             },
-                            onChanged: (_) => setState(() {}),
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _groupFemalePriceCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Female price / pet (?)',
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Pick location on map',
+                              onPressed: _openLocationPicker,
+                              icon: const Icon(Icons.map_outlined),
                             ),
-                            validator: (value) {
-                              if (!_isGroup) return null;
-                              final parsed = int.tryParse((value ?? '').trim());
-                              if (parsed == null || parsed <= 0) {
-                                return 'Enter valid price';
-                              }
-                              return null;
-                            },
-                            onChanged: (_) => setState(() {}),
-                          ),
+                            const Text(
+                              'Map',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                          ],
                         ),
                       ],
+                    ),
+                    if (_locationFromMap != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.05),
+                          border: Border.all(
+                              color: Theme.of(context).colorScheme.primary),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Selected on map',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(_locationFromMap!.formattedAddress),
+                            if ((_locationFromMap!.postalCode ?? '').isNotEmpty)
+                              Text('PIN: ${_locationFromMap!.postalCode}'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _addressCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Address / Landmark',
+                        hintText: 'House / Street / Landmark',
+                      ),
+                      minLines: 1,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _pincodeCtrl,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      decoration: const InputDecoration(
+                        labelText: 'Pincode',
+                        hintText: '6-digit postal code',
+                        counterText: '',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Availability & Contact pref
+              _SectionCard(
+                title: 'Availability & Contact',
+                child: Column(
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Available from'),
+                      subtitle: Text(
+                        _availableFrom == null
+                            ? 'Choose a date'
+                            : DateFormat('EEE, dd MMM yyyy')
+                                .format(_availableFrom!),
+                      ),
+                      trailing: OutlinedButton.icon(
+                        onPressed: _pickDate,
+                        icon: const Icon(Icons.event),
+                        label: const Text('Pick'),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Text('Total pets: $_groupTotalPets'),
-                          Text(
-                            'Group total price: ?$_groupTotalPrice',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
+                          _chip('WhatsApp'),
+                          _chip('Call'),
+                          _chip('Chat'),
                         ],
                       ),
                     ),
                   ],
-                ],
-              ),
-            ), // Health & features
-            _SectionCard(
-              title: 'Health & Features',
-              child: Column(
-                children: [
-                  if (_showVaccinationFields)
-                    Column(
-                      children: [
-                        _BoolRow(
-                          left: SwitchListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Vaccinated'),
-                            value: _vaccinated,
-                            onChanged: (v) => setState(() => _vaccinated = v),
-                          ),
-                          right: SwitchListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text('Dewormed'),
-                            value: _dewormed,
-                            onChanged: (v) => setState(() => _dewormed = v),
-                          ),
-                        ),
-                        if (_vaccinated) ...[
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _vaccineDetailsCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Vaccine details',
-                              hintText: 'Type, date, batch, vet, etc.',
-                            ),
-                            maxLines: 2,
-                          ),
-                        ],
-                      ],
-                    ),
-                  _BoolRow(
-                    left: SwitchListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Trained'),
-                      value: _trained,
-                      onChanged: (v) => setState(() => _trained = v),
-                    ),
-                    right: SwitchListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Delivery available'),
-                      value: _deliveryAvailable,
-                      onChanged: (v) => setState(() => _deliveryAvailable = v),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Location
-            _SectionCard(
-              title: 'Location',
-              subtitle: 'Pick on the map to auto-fill details',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: _DropdownTile<String>(
-                          label: 'City / District',
-                          value: _location,
-                          items: _locationOptions,
-                          onChanged: (v) {
-                            if (v == null) return;
-                            setState(() => _location = v);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Pick location on map',
-                            onPressed: _openLocationPicker,
-                            icon: const Icon(Icons.map_outlined),
-                          ),
-                          const Text(
-                            'Map',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (_locationFromMap != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:
-                            Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
-                        border:
-                            Border.all(color: Theme.of(context).colorScheme.primary),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Selected on map',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(_locationFromMap!.formattedAddress),
-                          if ((_locationFromMap!.postalCode ?? '').isNotEmpty)
-                            Text('PIN: ${_locationFromMap!.postalCode}'),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _addressCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Address / Landmark',
-                      hintText: 'House / Street / Landmark',
-                    ),
-                    minLines: 1,
-                    maxLines: 3,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _pincodeCtrl,
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    decoration: const InputDecoration(
-                      labelText: 'Pincode',
-                      hintText: '6-digit postal code',
-                      counterText: '',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Availability & Contact pref
-            _SectionCard(
-              title: 'Availability & Contact',
-              child: Column(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Available from'),
-                    subtitle: Text(
-                      _availableFrom == null
-                          ? 'Choose a date'
-                          : DateFormat('EEE, dd MMM yyyy')
-                              .format(_availableFrom!),
-                    ),
-                    trailing: OutlinedButton.icon(
-                      onPressed: _pickDate,
-                      icon: const Icon(Icons.event),
-                      label: const Text('Pick'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _chip('WhatsApp'),
-                        _chip('Call'),
-                        _chip('Chat'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Description
-            _SectionCard(
-              title: 'Description',
-              child: TextFormField(
-                controller: _descCtrl,
-                minLines: 3,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  hintText:
-                      'Describe the pet (temperament, diet, special care, etc.)',
                 ),
-                validator: (v) => (v == null || v.trim().length < 10)
-                    ? 'Add at least 10 characters'
-                    : null,
               ),
-            ),
 
-            const SizedBox(height: 8),
-            CheckboxListTile(
-              value: _termsAccepted,
-              onChanged: (v) => setState(() => _termsAccepted = v ?? false),
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('I accept the Terms & Conditions.'),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ],
+              // Description
+              _SectionCard(
+                title: 'Description',
+                child: TextFormField(
+                  controller: _descCtrl,
+                  minLines: 3,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    hintText:
+                        'Describe the pet (temperament, diet, special care, etc.)',
+                  ),
+                  validator: (v) => (v == null || v.trim().length < 10)
+                      ? 'Add at least 10 characters'
+                      : null,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                value: _termsAccepted,
+                onChanged: (v) => setState(() => _termsAccepted = v ?? false),
+                controlAffinity: ListTileControlAffinity.leading,
+                title: const Text('I accept the Terms & Conditions.'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
         ),
       ),
-    ),
 
-    // Submit bar
-    bottomSheet: Container(
+      // Submit bar
+      bottomSheet: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -2879,8 +2918,8 @@ class _FormSnapshot {
 
     Map<String, String> _map(dynamic value) {
       if (value is Map) {
-        return value.map((key, val) =>
-            MapEntry(key.toString(), val?.toString() ?? ''));
+        return value
+            .map((key, val) => MapEntry(key.toString(), val?.toString() ?? ''));
       }
       return {};
     }
@@ -3083,8 +3122,7 @@ class _MissingMediaBox extends StatelessWidget {
     return Container(
       color: Colors.grey.shade200,
       child: const Center(
-        child:
-            Icon(Icons.broken_image_outlined, size: 36, color: Colors.grey),
+        child: Icon(Icons.broken_image_outlined, size: 36, color: Colors.grey),
       ),
     );
   }
@@ -3251,18 +3289,18 @@ class _MyPetsTile extends StatelessWidget {
               Column(
                 children: [
                   for (int i = 0; i < pets.length && i < 5; i++) ...[
-                  _SellerPetRow(
-                    pet: pets[i],
-                    onTap: () => _openPet(context, pets[i]),
-                    onEdit: onEditTap == null
-                        ? null
-                        : () => onEditTap!(pets[i]),
-                    onDelete:
-                        onDeleteTap == null ? null : () => onDeleteTap!(pets[i]),
-                    onStatusChanged: onStatusChanged == null
-                        ? null
-                        : (status) => onStatusChanged!(pets[i], status),
-                  ),
+                    _SellerPetRow(
+                      pet: pets[i],
+                      onTap: () => _openPet(context, pets[i]),
+                      onEdit:
+                          onEditTap == null ? null : () => onEditTap!(pets[i]),
+                      onDelete: onDeleteTap == null
+                          ? null
+                          : () => onDeleteTap!(pets[i]),
+                      onStatusChanged: onStatusChanged == null
+                          ? null
+                          : (status) => onStatusChanged!(pets[i], status),
+                    ),
                     if (i < pets.length - 1 && i < 4)
                       const Divider(height: 12, thickness: 0.6),
                   ]
@@ -3349,10 +3387,13 @@ class _SellerPetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = context.findAncestorStateOfType<_SellTabState>();
-    final price =
-        state == null ? '' : state._priceLabel(pet); // ignore: library_private_types_in_public_api
-    final location =
-        state == null ? '' : state._locationLabel(pet); // ignore: library_private_types_in_public_api
+    final price = state == null
+        ? ''
+        : state._priceLabel(pet); // ignore: library_private_types_in_public_api
+    final location = state == null
+        ? ''
+        : state
+            ._locationLabel(pet); // ignore: library_private_types_in_public_api
     final addedAt = pet.addedAt ?? DateTime.now();
     final addedLabel = DateFormat('dd MMM yyyy, h:mm a').format(addedAt);
     final canDelete = onDelete != null && pet.status != PetStatus.deleted;
@@ -3432,18 +3473,18 @@ class _SellerPetRow extends StatelessWidget {
                           tooltip: 'Edit listing',
                           onPressed: onEdit,
                           splashRadius: 20,
-                          constraints: const BoxConstraints(
-                              minWidth: 36, minHeight: 36),
+                          constraints:
+                              const BoxConstraints(minWidth: 36, minHeight: 36),
                         ),
                       if (canDelete)
                         IconButton(
-                          icon:
-                              const Icon(Icons.delete_outline, color: Colors.red),
+                          icon: const Icon(Icons.delete_outline,
+                              color: Colors.red),
                           tooltip: 'Delete listing',
                           onPressed: onDelete,
                           splashRadius: 20,
-                          constraints: const BoxConstraints(
-                              minWidth: 36, minHeight: 36),
+                          constraints:
+                              const BoxConstraints(minWidth: 36, minHeight: 36),
                         ),
                     ],
                   ),
