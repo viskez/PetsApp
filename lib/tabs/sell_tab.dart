@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 import '../models/pet_catalog.dart';
 import '../models/pet_data.dart';
@@ -70,6 +71,7 @@ class _SellTabState extends State<SellTab> {
   final _weightCtrl = TextEditingController();
   final _subCategoryCtrl = TextEditingController();
   final _breedCtrl = TextEditingController();
+  bool _suppressFieldChange = false;
   final _pairCountCtrl = TextEditingController();
   final _groupMaleCountCtrl = TextEditingController();
   final _groupFemaleCountCtrl = TextEditingController();
@@ -118,6 +120,7 @@ class _SellTabState extends State<SellTab> {
   bool _deliveryAvailable = true;
   String _contactPref = 'WhatsApp';
   LocationSelectionResult? _locationFromMap;
+  Color? _pickedColor;
   PetStatus? _petStatusFilter;
   bool get _isReadOnlyFilter =>
       _petStatusFilter == PetStatus.sold ||
@@ -215,6 +218,32 @@ class _SellTabState extends State<SellTab> {
       _groupMaleCount * _groupMalePrice + _groupFemaleCount * _groupFemalePrice;
   bool get _showVaccinationFields => !_noVaccineCategories.contains(_category);
   String _priceLabel(PetCatalogItem pet) {
+    final countType = pet.countType?.trim().toLowerCase();
+
+    // Pair: show base price with "/ pair"
+    if (countType == 'pair') {
+      if (pet.price > 0) return 'Rs ${pet.price} / pair';
+      return 'Price not set';
+    }
+
+    // Group: show male/female per-pet prices if available
+    if (countType == 'group') {
+      final male = pet.groupMalePrice;
+      final female = pet.groupFemalePrice;
+      if (male > 0 || female > 0) {
+        final parts = <String>[];
+        if (male > 0) parts.add('♂ Rs $male');
+        if (female > 0) parts.add('♀ Rs $female');
+        return parts.join(' • ');
+      }
+      // fallback to total price if set
+      if (pet.groupTotalPrice > 0) {
+        return 'Group total: Rs ${pet.groupTotalPrice}';
+      }
+      return 'Price not set';
+    }
+
+    // Default single/unknown: compact price
     if (pet.price <= 0) return 'Price not set';
     return NumberFormat.compactCurrency(symbol: 'Rs ', decimalDigits: 0)
         .format(pet.price);
@@ -245,19 +274,34 @@ class _SellTabState extends State<SellTab> {
 
   void _setAgeFromDob(DateTime dob) {
     final now = DateTime.now();
+    // Prevent future dates
+    if (dob.isAfter(now)) {
+      _ageYearsCtrl.text = '0';
+      _ageMonthsCtrl.text = '0';
+      setState(() => _dateOfBirth = null);
+      return;
+    }
+
     int years = now.year - dob.year;
     int months = now.month - dob.month;
+
+    // Adjust if the current day is before the birth day within the month
     if (now.day < dob.day) {
       months -= 1;
     }
+
+    // Normalize negative months
     while (months < 0) {
       years -= 1;
       months += 12;
     }
+
     years = years.clamp(0, 80);
     months = months.clamp(0, 11);
+
     _ageYearsCtrl.text = years.toString();
     _ageMonthsCtrl.text = months.toString();
+
     setState(() {
       _dateOfBirth = dob;
     });
@@ -334,14 +378,50 @@ class _SellTabState extends State<SellTab> {
     _descCtrl.text = pet.description;
     _location = pet.location;
     _addLocationOption(_location);
-    _addressCtrl.text = pet.location;
+    _addressCtrl.text = pet.address ?? pet.location;
+    _pincodeCtrl.text = pet.pincode ?? '';
+    _colorCtrl.text = pet.color ?? '';
+    _ageYearsCtrl.text =
+        pet.ageYears > 0 ? pet.ageYears.toString() : _ageYearsCtrl.text;
+    _ageMonthsCtrl.text =
+        pet.ageMonths > 0 ? pet.ageMonths.toString() : _ageMonthsCtrl.text;
+    _weightCtrl.text = pet.weightKg ?? '';
+    _sizeCtrl.text = pet.sizeValue ?? '';
+    _sizeUnit = pet.sizeUnit ?? _sizeUnit;
+    _gender = pet.gender ?? _gender;
+    _countType = pet.countType ?? _countType;
     final (petName, breed) = _parseTitle(pet.title);
     _category = _labelForCategory(pet.category);
     _subCategory = petName;
     _breed = breed;
     _subCategoryCtrl.text = _subCategory;
     _breedCtrl.text = _breed;
-    _contactPref = 'Phone';
+    _contactPref = pet.contactPreference ?? 'Phone';
+    _negotiable = pet.negotiable;
+    _vaccinated = pet.vaccinated;
+    _dewormed = pet.dewormed;
+    _trained = pet.trained;
+    _deliveryAvailable = pet.deliveryAvailable;
+    _availableFrom = pet.availableFrom;
+    if ((pet.color ?? '').isNotEmpty) {
+      _colorCtrl.text = pet.color!;
+      _pickedColor = _colorFromHex(pet.color!);
+    }
+    if (pet.pairCount > 0) {
+      _pairCountCtrl.text = pet.pairCount.toString();
+    }
+    if (pet.groupMaleCount > 0) {
+      _groupMaleCountCtrl.text = pet.groupMaleCount.toString();
+    }
+    if (pet.groupFemaleCount > 0) {
+      _groupFemaleCountCtrl.text = pet.groupFemaleCount.toString();
+    }
+    if (pet.groupMalePrice > 0) {
+      _groupMalePriceCtrl.text = pet.groupMalePrice.toString();
+    }
+    if (pet.groupFemalePrice > 0) {
+      _groupFemalePriceCtrl.text = pet.groupFemalePrice.toString();
+    }
     _existingImages
       ..clear()
       ..addAll(pet.images);
@@ -360,6 +440,7 @@ class _SellTabState extends State<SellTab> {
     _weightCtrl.clear();
     _subCategoryCtrl.clear();
     _breedCtrl.clear();
+    _pickedColor = null;
     _ageYearsCtrl.clear();
     _ageMonthsCtrl.clear();
     _location = _locationOptions.first;
@@ -729,19 +810,22 @@ class _SellTabState extends State<SellTab> {
 
   List<String> _subCategoriesFor(String category) {
     final base = category == 'All'
-        ? (_allPets.isEmpty ? <String>[] : _allPets)
-        : (_petOptionsByCategory[category] ?? const <String>[]);
+        ? {
+            ..._allPets,
+            ..._categoryOptions
+                .where((c) => c != 'All'), // show main groups too
+          }
+        : (_petOptionsByCategory[category] ?? const <String>{});
     final custom = _customSubCategoriesFor(category);
     final merged = <String>{
-      ...base.where((v) => v.toLowerCase() != 'other'),
-      ...custom.where((v) => v.toLowerCase() != 'other'),
-    }.toList()
-      ..sort();
-    final options = ['All', ...merged];
-    if (!options.contains('Other')) {
-      options.add('Other');
+      ...base,
+      ...custom,
     }
-    return options;
+        .where((v) => v.toLowerCase() != 'other' && v.toLowerCase() != 'all')
+        .toList()
+      ..sort();
+
+    return ['All', ...merged];
   }
 
   List<String> _breedsForSelection(String category, String subCategory) {
@@ -758,15 +842,16 @@ class _SellTabState extends State<SellTab> {
     }
 
     final merged = values
-        .where((v) => v.toLowerCase() != 'other')
+        .where((v) => v.toLowerCase() != 'other' && v.toLowerCase() != 'all')
         .toSet()
         .toList()
       ..sort();
-    final options = ['All', ...merged];
-    if (!options.contains('Other')) {
-      options.add('Other');
+
+    final ordered = <String>['All', ...merged];
+    if (ordered.length == 1) {
+      ordered.insert(1, 'Not specified');
     }
-    return options;
+    return ordered;
   }
 
   void _onCategoryChanged(String? value) {
@@ -775,122 +860,63 @@ class _SellTabState extends State<SellTab> {
     final newSub =
         subCats.contains(_subCategory) ? _subCategory : subCats.first;
     final breeds = _breedsForSelection(value, newSub);
-    final newBreed = breeds.contains(_breed) ? _breed : breeds.first;
+    final newBreed = breeds.isNotEmpty
+        ? (breeds.contains(_breed) ? _breed : breeds.first)
+        : 'All';
     setState(() {
       _category = value;
       _subCategory = newSub;
       _breed = newBreed;
-      _subCategoryCtrl.text = newSub;
-      _breedCtrl.text = newBreed;
+      _setText(_subCategoryCtrl, newSub);
+      _setText(_breedCtrl, newBreed);
     });
   }
 
-  void _onSubCategorySelected(String? value) async {
-    if (value == null) return;
-    if (value == 'Other') {
-      final prevSub = _subCategory;
-      final prevBreed = _breed;
-      final result = await _showCustomOptionDialog(
-        title: 'Add Sub Category',
-        requireSubCategory: true,
-        requireBreed: false,
-      );
-      if (!mounted) return;
-      if (result == null || !result.hasSubCategory) {
-        setState(() {
-          _subCategory = prevSub;
-          _breed = prevBreed;
-          _subCategoryCtrl.text = prevSub;
-          _breedCtrl.text = prevBreed;
-        });
-        return;
-      }
-      final newSub = result.subCategory!.trim();
-      final newBreedInput = result.breed?.trim() ?? '';
-      if (!_hasSubCategory(_category, newSub)) {
-        _addCustomSubCategory(_category, newSub);
-      }
-      if (newBreedInput.isNotEmpty) {
-        _addCustomBreed(_category, newSub, newBreedInput);
-      }
-      final breeds = _breedsForSelection(_category, newSub);
-      final normalizedBreed = newBreedInput.isNotEmpty
-          ? newBreedInput
-          : (breeds.contains(prevBreed) ? prevBreed : breeds.first);
-      setState(() {
-        _subCategory = newSub;
-        _breed = normalizedBreed;
-        _subCategoryCtrl.text = newSub;
-        _breedCtrl.text = normalizedBreed;
-      });
-      await _saveCustomOptions();
-      return;
-    }
-    final breeds = _breedsForSelection(_category, value);
-    final newBreed = breeds.contains(_breed) ? _breed : breeds.first;
+  void _onSubCategoryTextChanged(String value) {
+    if (_suppressFieldChange) return;
+    final trimmed = value.trim();
+    final effective = trimmed.isEmpty ? 'All' : trimmed;
+    final breeds = _breedsForSelection(_category, effective);
+    final nextBreed = breeds.isNotEmpty
+        ? (breeds.contains(_breed) ? _breed : breeds.first)
+        : 'All';
     setState(() {
-      _subCategory = value;
-      _breed = newBreed;
-      _subCategoryCtrl.text = value;
-      _breedCtrl.text = newBreed;
+      _subCategory = effective;
+      _setText(_breedCtrl, nextBreed);
+      _breed = nextBreed;
+      if (trimmed.isNotEmpty && !_hasSubCategory(_category, trimmed)) {
+        _addCustomSubCategory(_category, trimmed);
+        _saveCustomOptions();
+      }
     });
   }
 
-  void _onBreedSelected(String? value) async {
-    if (value == null) return;
-    if (value == 'Other') {
-      final prevBreed = _breed;
-      final prevSub = _subCategory;
-      final hasSubSelection =
-          prevSub.isNotEmpty && prevSub != 'All' && prevSub != 'Other';
-      final result = await _showCustomOptionDialog(
-        title: 'Add Breed',
-        requireSubCategory: !hasSubSelection,
-        requireBreed: true,
-        initialSubCategory: hasSubSelection ? prevSub : '',
-      );
-      if (!mounted) return;
-      if (result == null || !result.hasBreed) {
-        setState(() {
-          _breed = prevBreed;
-          _breedCtrl.text = prevBreed;
-        });
-        return;
-      }
-      final submittedSub = result.subCategory?.trim() ?? '';
-      final targetSub = submittedSub.isNotEmpty
-          ? submittedSub
-          : (hasSubSelection ? prevSub : '');
-      if (targetSub.isEmpty) {
-        setState(() {
-          _breed = prevBreed;
-          _breedCtrl.text = prevBreed;
-        });
-        return;
-      }
-      final newBreed = result.breed!.trim();
-      if (!_hasSubCategory(_category, targetSub)) {
-        _addCustomSubCategory(_category, targetSub);
-      }
-      _addCustomBreed(_category, targetSub, newBreed);
-      setState(() {
-        _subCategory = targetSub;
-        _breed = newBreed;
-        _subCategoryCtrl.text = targetSub;
-        _breedCtrl.text = newBreed;
-      });
-      await _saveCustomOptions();
-      return;
-    }
+  void _onBreedTextChanged(String value) {
+    if (_suppressFieldChange) return;
+    final trimmed = value.trim();
+    final effective = trimmed.isEmpty ? 'All' : trimmed;
     setState(() {
-      _breed = value;
-      _breedCtrl.text = value;
+      _breed = effective;
+      if (trimmed.isNotEmpty &&
+          !_isCustomBreed(_category, _subCategory, trimmed) &&
+          !_breedsForSelection(_category, _subCategory).contains(effective)) {
+        _addCustomBreed(_category, _subCategory, effective);
+        _saveCustomOptions();
+      }
     });
+  }
+
+  void _setText(TextEditingController ctrl, String value) {
+    _suppressFieldChange = true;
+    ctrl.text = value;
+    ctrl.selection = TextSelection.collapsed(offset: value.length);
+    _suppressFieldChange = false;
   }
 
   Future<_CustomOptionResult?> _showCustomOptionDialog({
     required bool requireSubCategory,
     required bool requireBreed,
+    bool askForBreed = true,
     String? initialSubCategory,
     String? initialBreed,
     String? title,
@@ -908,30 +934,33 @@ class _SellTabState extends State<SellTab> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextFormField(
-                  controller: subCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Sub category name'),
-                  validator: (value) {
-                    final text = value?.trim() ?? '';
-                    if (requireSubCategory && text.isEmpty) {
-                      return 'Please add a sub category';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: breedCtrl,
-                  decoration: const InputDecoration(labelText: 'Breed name'),
-                  validator: (value) {
-                    final text = value?.trim() ?? '';
-                    if (requireBreed && text.isEmpty) {
-                      return 'Please add a breed';
-                    }
-                    return null;
-                  },
-                ),
+                if (requireSubCategory)
+                  TextFormField(
+                    controller: subCtrl,
+                    decoration:
+                        const InputDecoration(labelText: 'Sub category name'),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (requireSubCategory && text.isEmpty) {
+                        return 'Please add a sub category';
+                      }
+                      return null;
+                    },
+                  ),
+                if (askForBreed) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: breedCtrl,
+                    decoration: const InputDecoration(labelText: 'Breed name'),
+                    validator: (value) {
+                      final text = value?.trim() ?? '';
+                      if (requireBreed && text.isEmpty) {
+                        return 'Please add a breed';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -952,13 +981,12 @@ class _SellTabState extends State<SellTab> {
             FilledButton(
               onPressed: () {
                 if (!formKey.currentState!.validate()) return;
-                Navigator.pop(
-                  context,
-                  _CustomOptionResult(
-                    subCategory: subCtrl.text.trim(),
-                    breed: breedCtrl.text.trim(),
-                  ),
+                // Dismiss dialog instantly with result
+                final result = _CustomOptionResult(
+                  subCategory: subCtrl.text.trim(),
+                  breed: askForBreed ? breedCtrl.text.trim() : null,
                 );
+                Navigator.pop(context, result);
               },
               child: const Text('Save'),
             ),
@@ -1222,6 +1250,20 @@ class _SellTabState extends State<SellTab> {
     });
   }
 
+  Color? _colorFromHex(String value) {
+    final hex = value.replaceAll('#', '').trim();
+    if (hex.length == 6) {
+      return Color(int.parse('FF$hex', radix: 16));
+    }
+    if (hex.length == 8) {
+      return Color(int.parse(hex, radix: 16));
+    }
+    return null;
+  }
+
+  String _hexFromColor(Color color) =>
+      '#${color.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
   _FormSnapshot _captureSnapshot() {
     return _FormSnapshot(
       category: _category,
@@ -1247,6 +1289,7 @@ class _SellTabState extends State<SellTab> {
       existingVideos: List<String>.from(_existingVideos),
       localImages: _images.map((file) => file.path).toList(),
       localVideos: _videos.map((file) => file.path).toList(),
+      pickedColor: _pickedColor != null ? _hexFromColor(_pickedColor!) : null,
       textFields: {
         'price': _priceCtrl.text,
         'ageYears': _ageYearsCtrl.text,
@@ -1347,6 +1390,7 @@ class _SellTabState extends State<SellTab> {
     _addressCtrl.text = snapshot.textFields['address'] ?? '';
     _pincodeCtrl.text = snapshot.textFields['pincode'] ?? '';
     _colorCtrl.text = snapshot.textFields['color'] ?? '';
+    _pickedColor = _colorFromHex(snapshot.pickedColor ?? '');
     _sizeCtrl.text = snapshot.textFields['size'] ?? '';
     _weightCtrl.text = snapshot.textFields['weight'] ?? '';
     _subCategoryCtrl.text = snapshot.textFields['subCategory'] ?? '';
@@ -1595,6 +1639,36 @@ class _SellTabState extends State<SellTab> {
       category: _categoryFromLabel(_category),
       addedAt: widget.initial?.addedAt ?? DateTime.now(),
       status: widget.initial?.status ?? PetStatus.active,
+      color: _colorCtrl.text.trim().isEmpty ? null : _colorCtrl.text.trim(),
+      ageYears: int.tryParse(_ageYearsCtrl.text.trim()) ?? 0,
+      ageMonths: int.tryParse(_ageMonthsCtrl.text.trim()) ?? 0,
+      gender: _isSingle ? _gender : null,
+      countType: _countType,
+      sizeValue: _sizeCtrl.text.trim().isEmpty ? null : _sizeCtrl.text.trim(),
+      sizeUnit: _sizeUnit,
+      weightKg: _isSingle ? _weightCtrl.text.trim() : null,
+      negotiable: _negotiable,
+      vaccinated: _vaccinated,
+      dewormed: _dewormed,
+      trained: _trained,
+      deliveryAvailable: _deliveryAvailable,
+      vaccineDetails: _vaccineDetailsCtrl.text.trim().isEmpty
+          ? null
+          : _vaccineDetailsCtrl.text.trim(),
+      availableFrom: _availableFrom,
+      address:
+          _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+      pincode:
+          _pincodeCtrl.text.trim().isEmpty ? null : _pincodeCtrl.text.trim(),
+      contactPreference: _contactPref,
+      pairCount: _isPair ? _pairCount : 0,
+      pairTotalPrice: _isPair ? _pairTotalPrice : 0,
+      groupMaleCount: _isGroup ? _groupMaleCount : 0,
+      groupFemaleCount: _isGroup ? _groupFemaleCount : 0,
+      groupMalePrice: _isGroup ? _groupMalePrice : 0,
+      groupFemalePrice: _isGroup ? _groupFemalePrice : 0,
+      groupTotalPets: _isGroup ? _groupTotalPets : 0,
+      groupTotalPrice: _isGroup ? _groupTotalPrice : 0,
     );
 
     final snapshot = _captureSnapshot();
@@ -1867,22 +1941,24 @@ class _SellTabState extends State<SellTab> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: _DropdownTile<String>(
-                            label: 'Sub category',
-                            value: _subCategory,
-                            items: _subCategoriesFor(_category),
-                            onChanged: _onSubCategorySelected,
-                            isHighlighted: (val) =>
-                                _isCustomSubCategory(_category, val),
-                            itemBuilder: (val) => val == 'Other'
-                                ? Row(
-                                    children: const [
-                                      Icon(Icons.add_circle_outline, size: 18),
-                                      SizedBox(width: 6),
-                                      Text('Other'),
-                                    ],
-                                  )
-                                : Text(val),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _SuggestInputField(
+                                  label: 'Sub category',
+                                  controller: _subCategoryCtrl,
+                                  suggestions: _subCategoriesFor(_category),
+                                  onChanged: _onSubCategoryTextChanged,
+                                  onSuggestionSelected:
+                                      _onSubCategoryTextChanged,
+                                  isHighlighted: (val) =>
+                                      _isCustomSubCategory(_category, val),
+                                  highlightStyle: const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -1891,34 +1967,32 @@ class _SellTabState extends State<SellTab> {
                     Row(
                       children: [
                         Expanded(
-                          child: _DropdownTile<String>(
+                          child: _SuggestInputField(
                             label: 'Breed',
-                            value: _breed,
-                            items: _breedsForSelection(_category, _subCategory),
-                            onChanged: _onBreedSelected,
+                            controller: _breedCtrl,
+                            suggestions:
+                                _breedsForSelection(_category, _subCategory),
+                            onChanged: _onBreedTextChanged,
+                            onSuggestionSelected: _onBreedTextChanged,
                             isHighlighted: (val) =>
                                 _isCustomBreed(_category, _subCategory, val),
-                            itemBuilder: (val) => val == 'Other'
-                                ? Row(
-                                    children: const [
-                                      Icon(Icons.add_circle_outline, size: 18),
-                                      SizedBox(width: 6),
-                                      Text('Other'),
-                                    ],
-                                  )
-                                : Text(val),
+                            highlightStyle: const TextStyle(
+                                color: Colors.red, fontWeight: FontWeight.w700),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
-                            controller: _colorCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Color (optional)',
-                              hintText: 'e.g. Brown / White',
-                            ),
-                          ),
-                        ),
+                            child: _ColorPickerField(
+                          controller: _colorCtrl,
+                          initialColor: _pickedColor,
+                          onColorPicked: (color, hex) {
+                            setState(() {
+                              _pickedColor = color;
+                              _colorCtrl.text = hex;
+                            });
+                            _autoSaveDraft();
+                          },
+                        )),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -2108,6 +2182,13 @@ class _SellTabState extends State<SellTab> {
                     const SizedBox(height: 12),
                     ResponsiveTileRow(
                       children: [
+                        _DropdownTile<String>(
+                          label: 'Unit',
+                          value: _sizeUnit,
+                          items: _sizeUnits,
+                          onChanged: (value) =>
+                              setState(() => _sizeUnit = value ?? 'cm'),
+                        ),
                         TextFormField(
                           controller: _sizeCtrl,
                           keyboardType: TextInputType.number,
@@ -2115,13 +2196,6 @@ class _SellTabState extends State<SellTab> {
                             labelText: 'Size (Approx.)', //≈
                             hintText: 'For example 5.5',
                           ),
-                        ),
-                        _DropdownTile<String>(
-                          label: 'Unit',
-                          value: _sizeUnit,
-                          items: _sizeUnits,
-                          onChanged: (value) =>
-                              setState(() => _sizeUnit = value ?? 'cm'),
                         ),
                       ],
                     ),
@@ -2239,25 +2313,16 @@ class _SellTabState extends State<SellTab> {
                   children: [
                     if (_showVaccinationFields)
                       Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _BoolRow(
-                            left: SwitchListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Vaccinated'),
-                              value: _vaccinated,
-                              onChanged: (v) => setState(() => _vaccinated = v),
-                            ),
-                            right: SwitchListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: const Text('Dewormed'),
-                              value: _dewormed,
-                              onChanged: (v) => setState(() => _dewormed = v),
-                            ),
+                          SwitchListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Vaccinated'),
+                            value: _vaccinated,
+                            onChanged: (v) => setState(() => _vaccinated = v),
                           ),
                           if (_vaccinated) ...[
-                            const SizedBox(height: 8),
                             TextFormField(
                               controller: _vaccineDetailsCtrl,
                               decoration: const InputDecoration(
@@ -2266,7 +2331,15 @@ class _SellTabState extends State<SellTab> {
                               ),
                               maxLines: 2,
                             ),
+                            const SizedBox(height: 8),
                           ],
+                          SwitchListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Dewormed'),
+                            value: _dewormed,
+                            onChanged: (v) => setState(() => _dewormed = v),
+                          ),
                         ],
                       ),
                     _BoolRow(
@@ -2667,12 +2740,108 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
+class _ColorPickerField extends StatelessWidget {
+  final TextEditingController controller;
+  final Color? initialColor;
+  final void Function(Color color, String hex) onColorPicked;
+
+  const _ColorPickerField(
+      {required this.controller,
+      required this.onColorPicked,
+      this.initialColor});
+
+  @override
+  Widget build(BuildContext context) {
+    final displayColor =
+        initialColor ?? _tryParse(controller.text) ?? Colors.teal.shade600;
+
+    return InkWell(
+      onTap: () => _openPicker(context, displayColor),
+      borderRadius: BorderRadius.circular(12),
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'Color (optional)',
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: displayColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black12),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                controller.text.isNotEmpty ? controller.text : 'Pick a color',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.palette_outlined),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color? _tryParse(String value) {
+    final hex = value.replaceAll('#', '').trim();
+    if (hex.length == 6) {
+      return Color(int.parse('FF$hex', radix: 16));
+    }
+    if (hex.length == 8) {
+      return Color(int.parse(hex, radix: 16));
+    }
+    return null;
+  }
+
+  Future<void> _openPicker(BuildContext context, Color seed) async {
+    Color temp = seed;
+    final result = await showDialog<Color>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Pick a color'),
+        content: SingleChildScrollView(
+          child: ColorPicker(
+            pickerColor: seed,
+            onColorChanged: (c) => temp = c,
+            enableAlpha: false,
+            paletteType: PaletteType.hsvWithHue,
+            displayThumbColor: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, temp),
+              child: const Text('Select')),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      final hex =
+          '#${result.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+      onColorPicked(result, hex);
+    }
+  }
+}
+
 class _SuggestInputField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
   final List<String> suggestions;
   final ValueChanged<String> onChanged;
   final ValueChanged<String>? onSuggestionSelected;
+  final bool Function(String value)? isHighlighted;
+  final TextStyle? highlightStyle;
+  final VoidCallback? onAddPressed;
+  final String? addTooltip;
 
   const _SuggestInputField({
     required this.label,
@@ -2680,57 +2849,74 @@ class _SuggestInputField extends StatelessWidget {
     required this.suggestions,
     required this.onChanged,
     this.onSuggestionSelected,
+    this.isHighlighted,
+    this.highlightStyle,
+    this.onAddPressed,
+    this.addTooltip,
   });
 
   @override
   Widget build(BuildContext context) {
-    final menuItems = _filterSuggestions(controller.text, suggestions);
+    final text = controller.text;
+    final menuItems = _filterSuggestions(text, suggestions);
+    final bool highlightCurrent =
+        isHighlighted != null && isHighlighted!(controller.text.trim());
+    final currentHighlightStyle = highlightCurrent
+        ? (highlightStyle ??
+            const TextStyle(color: Colors.red, fontWeight: FontWeight.w700))
+        : null;
 
     return TextFormField(
       controller: controller,
+      style: currentHighlightStyle,
       decoration: InputDecoration(
         labelText: label,
-        suffixIcon: menuItems.isEmpty
-            ? null
-            : PopupMenuButton<String>(
-                tooltip: 'Choose $label',
-                icon: const Icon(Icons.arrow_drop_down),
-                onSelected: (value) {
-                  controller.text = value;
-                  controller.selection =
-                      TextSelection.collapsed(offset: value.length);
-                  onSuggestionSelected?.call(value);
-                  onChanged(value);
-                },
-                itemBuilder: (_) => menuItems
-                    .map((s) => PopupMenuItem<String>(
-                          value: s,
-                          child: Text(s),
-                        ))
-                    .toList(),
+        labelStyle: currentHighlightStyle,
+        suffixIcon: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (onAddPressed != null)
+              IconButton(
+                tooltip: addTooltip ?? 'Add $label',
+                icon: const Icon(Icons.add_circle_outline),
+                onPressed: onAddPressed,
               ),
+            PopupMenuButton<String>(
+              tooltip: 'Show all $label options',
+              icon: const Icon(Icons.arrow_drop_down),
+              onSelected: (value) {
+                controller.text = value;
+                controller.selection =
+                    TextSelection.collapsed(offset: value.length);
+                onSuggestionSelected?.call(value);
+                onChanged(value);
+              },
+              itemBuilder: (_) => suggestions
+                  .map((s) => PopupMenuItem<String>(
+                        value: s,
+                        child: Text(
+                          s,
+                          style: (isHighlighted != null &&
+                                  isHighlighted!(s.trim()))
+                              ? (highlightStyle ??
+                                  const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.w700))
+                              : null,
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ],
+        ),
       ),
       onChanged: onChanged,
     );
   }
 
   List<String> _filterSuggestions(String query, List<String> source) {
-    final trimmed = query.trim().toLowerCase();
-    if (trimmed.isEmpty) return source;
-    final starts = <String>[];
-    final contains = <String>[];
-    for (final item in source) {
-      final lower = item.toLowerCase();
-      if (lower.startsWith(trimmed)) {
-        starts.add(item);
-      } else if (lower.contains(trimmed)) {
-        contains.add(item);
-      }
-    }
-    return [
-      ...starts,
-      ...contains,
-    ];
+    // Do not filter; show all options so the dropdown isn't limited to a single match.
+    return source;
   }
 }
 
@@ -2831,6 +3017,7 @@ class _FormSnapshot {
   final List<String> localImages;
   final List<String> localVideos;
   final Map<String, String> textFields;
+  final String? pickedColor;
 
   const _FormSnapshot({
     required this.category,
@@ -2857,6 +3044,7 @@ class _FormSnapshot {
     required this.localImages,
     required this.localVideos,
     required this.textFields,
+    required this.pickedColor,
   });
 
   Map<String, dynamic> toJson() => {
@@ -2892,6 +3080,7 @@ class _FormSnapshot {
         'localImages': localImages,
         'localVideos': localVideos,
         'textFields': textFields,
+        'pickedColor': pickedColor,
       };
 
   factory _FormSnapshot.fromJson(Map<String, dynamic> json) {
@@ -2956,6 +3145,7 @@ class _FormSnapshot {
       localImages: _list(json['localImages']),
       localVideos: _list(json['localVideos']),
       textFields: _map(json['textFields']),
+      pickedColor: json['pickedColor'] as String?,
     );
   }
 }

@@ -31,6 +31,32 @@ extension PetCatalogToPetItem on PetCatalogItem {
         description: description,
         sellerName: sellerName,
         sellerPhone: phone,
+        color: color,
+        ageYears: ageYears,
+        ageMonths: ageMonths,
+        gender: gender,
+        countType: countType,
+        sizeValue: sizeValue,
+        sizeUnit: sizeUnit,
+        weightKg: weightKg,
+        negotiable: negotiable,
+        vaccinated: vaccinated,
+        dewormed: dewormed,
+        trained: trained,
+        deliveryAvailable: deliveryAvailable,
+        vaccineDetails: vaccineDetails,
+        availableFrom: availableFrom,
+        address: address,
+        pincode: pincode,
+        contactPreference: contactPreference,
+        pairCount: pairCount,
+        pairTotalPrice: pairTotalPrice,
+        groupMaleCount: groupMaleCount,
+        groupFemaleCount: groupFemaleCount,
+        groupMalePrice: groupMalePrice,
+        groupFemalePrice: groupFemalePrice,
+        groupTotalPets: groupTotalPets,
+        groupTotalPrice: groupTotalPrice,
       );
 }
 
@@ -131,7 +157,8 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Check price', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text('Check price',
+            style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
@@ -145,7 +172,8 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
               hintText: 'Search pet or breed (e.g. Minpin, Labrador, Parrot)',
               filled: true,
               fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onSubmitted: _onSearchSubmitted,
           ),
@@ -261,7 +289,8 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
               ]),
               const SizedBox(height: 6),
               Row(children: [
-                const Text('Age: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Age: ',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
                 Text(_ageText),
               ]),
             ]),
@@ -281,7 +310,8 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
           if (_result != null) ...[
             _resultCard(_result!),
             const SizedBox(height: 12),
-            if (_result!.matches.isNotEmpty) _comparableScroller(_result!.matches),
+            if (_result!.matches.isNotEmpty)
+              _comparableScroller(_result!.matches),
           ],
         ],
       ),
@@ -302,7 +332,8 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
         setState(() {
           _category = _labelForCategory(it.category);
           _pet = pet;
-          _breed = (breed.isNotEmpty && (_breedMapByPet[_pet]?.contains(breed) ?? false))
+          _breed = (breed.isNotEmpty &&
+                  (_breedMapByPet[_pet]?.contains(breed) ?? false))
               ? breed
               : 'Any';
           _location = 'All locations';
@@ -338,7 +369,8 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
 
   /* -------------------- small builders -------------------- */
 
-  Widget _sectionCard({required String title, String? subtitle, required Widget child}) {
+  Widget _sectionCard(
+      {required String title, String? subtitle, required Widget child}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -366,12 +398,17 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
     return DropdownButtonFormField<T>(
       initialValue: value,
       decoration: InputDecoration(labelText: label),
-      items: items.map((e) => DropdownMenuItem<T>(value: e, child: Text('$e'))).toList(),
+      items: items
+          .map((e) => DropdownMenuItem<T>(value: e, child: Text('$e')))
+          .toList(),
       onChanged: onChanged,
     );
   }
 
-  Widget _dobPicker({required String label, required DateTime? dob, required VoidCallback onPick}) {
+  Widget _dobPicker(
+      {required String label,
+      required DateTime? dob,
+      required VoidCallback onPick}) {
     String text;
     if (dob == null) {
       text = 'Select date';
@@ -385,8 +422,13 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
       onTap: onPick,
       borderRadius: BorderRadius.circular(8),
       child: InputDecorator(
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        child: Row(children: [const Icon(Icons.event, size: 18), const SizedBox(width: 8), Text(text)]),
+        decoration: InputDecoration(
+            labelText: label, border: const OutlineInputBorder()),
+        child: Row(children: [
+          const Icon(Icons.event, size: 18),
+          const SizedBox(width: 8),
+          Text(text)
+        ]),
       ),
     );
   }
@@ -397,12 +439,15 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Estimated Range', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text('Estimated Range',
+              style: TextStyle(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(child: _metric('Low', r.low == null ? '-' : '₹${r.low}')),
-            Expanded(child: _metric('High', r.high == null ? '-' : '₹${r.high}')),
-            Expanded(child: _metric('Average', r.avg == null ? '-' : '₹${r.avg}')),
+            Expanded(
+                child: _metric('High', r.high == null ? '-' : '₹${r.high}')),
+            Expanded(
+                child: _metric('Average', r.avg == null ? '-' : '₹${r.avg}')),
           ]),
         ]),
       ),
@@ -418,9 +463,12 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(color: Colors.teal, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.teal, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(value,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       ]),
     );
   }
@@ -428,14 +476,16 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
   /* ------------ Horizontal comparable scroller ------------ */
 
   Widget _comparableScroller(List<PetCatalogItem> items) {
-    final sorted = [...items]..sort((a, b) => _postedAtFor(b).compareTo(_postedAtFor(a)));
+    final sorted = [...items]
+      ..sort((a, b) => _postedAtFor(b).compareTo(_postedAtFor(a)));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Padding(
           padding: EdgeInsets.only(bottom: 6),
-          child: Text('Comparable listings', style: TextStyle(fontWeight: FontWeight.w700)),
+          child: Text('Comparable listings',
+              style: TextStyle(fontWeight: FontWeight.w700)),
         ),
         SizedBox(
           height: 168,
@@ -450,7 +500,9 @@ class _CheckPriceScreenState extends State<CheckPriceScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => PetDetailsScreen(item: sorted[i].toItem())),
+                  MaterialPageRoute(
+                      builder: (_) =>
+                          PetDetailsScreen(item: sorted[i].toItem())),
                 );
               },
             ),
@@ -474,7 +526,8 @@ class _ComparableCard extends StatelessWidget {
   final PetCatalogItem item;
   final DateTime postedAt;
   final VoidCallback onTap;
-  const _ComparableCard({required this.item, required this.postedAt, required this.onTap});
+  const _ComparableCard(
+      {required this.item, required this.postedAt, required this.onTap});
 
   String get _postedText {
     final days = DateTime.now().difference(postedAt).inDays;
@@ -494,7 +547,8 @@ class _ComparableCard extends StatelessWidget {
           elevation: 1,
           margin: EdgeInsets.zero,
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,21 +567,26 @@ class _ComparableCard extends StatelessWidget {
                       item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600, height: 1.1),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, height: 1.1),
                     ),
                     const SizedBox(height: 2),
                     Row(
                       children: [
-                        Text('₹${item.price}', style: const TextStyle(fontWeight: FontWeight.bold, height: 1.0)),
+                        Text('₹${item.price}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, height: 1.0)),
                         const Spacer(),
-                        const Icon(Icons.schedule, size: 12.5, color: Colors.grey),
+                        const Icon(Icons.schedule,
+                            size: 12.5, color: Colors.grey),
                         const SizedBox(width: 2),
                         Flexible(
                           child: Text(
                             _postedText,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 10, color: Colors.grey, height: 1.0),
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey, height: 1.0),
                           ),
                         ),
                       ],
@@ -548,7 +607,11 @@ class _ComparableCard extends StatelessWidget {
 class PriceResult {
   final int? low, high, avg;
   final List<PetCatalogItem> matches;
-  const PriceResult({required this.low, required this.high, required this.avg, required this.matches});
+  const PriceResult(
+      {required this.low,
+      required this.high,
+      required this.avg,
+      required this.matches});
 }
 
 PriceResult computeRange({
@@ -582,7 +645,8 @@ PriceResult computeRange({
   list.sort((a, b) => a.price.compareTo(b.price));
   final low = list.first.price;
   final high = list.last.price;
-  final avg = (list.map((e) => e.price).reduce((a, b) => a + b) / list.length).round();
+  final avg =
+      (list.map((e) => e.price).reduce((a, b) => a + b) / list.length).round();
 
   return PriceResult(low: low, high: high, avg: avg, matches: list);
 }

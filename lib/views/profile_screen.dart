@@ -1,10 +1,13 @@
 import 'dart:math' as math;
 
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/call_stats_store.dart';
 import '../models/message_stats_store.dart';
@@ -22,7 +25,6 @@ import '../views/pet_details.dart';
 import '../views/location_picker_screen.dart';
 import '../views/wishlist_screen.dart';
 import '../widgets/pet_image.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 enum _PointsRange { day, week, month, year }
 
@@ -38,6 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   UserProfile _profile = Session.currentUser;
   final WishlistStore _wishlist = WishlistStore();
   final TextEditingController _idCtrl = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
   _PointsRange _pointsRange = _PointsRange.day;
   late final VoidCallback _planListener;
   late final VoidCallback _callStatsListener;
@@ -55,6 +58,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _loadingStats = true;
   int _availablePoints = 0;
   int _spentPoints = 0;
+  String? _profilePhotoPath;
 
   @override
   void initState() {
@@ -78,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _profile = merged;
     });
     await Session.setUser(merged);
+    await _loadProfilePhoto();
     await _loadProfileId();
     await Future.wait([_loadStats(), _loadPlanPoints()]);
   }
@@ -132,6 +137,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _idPrefsKey(String email) =>
       'profile_id_${email.toLowerCase().replaceAll(' ', '_')}';
+  String _photoPrefsKey(String email) =>
+      'profile_photo_${email.toLowerCase().replaceAll(' ', '_')}';
+
+  Future<void> _loadProfilePhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString(_photoPrefsKey(_profile.email));
+    if (!mounted) return;
+    setState(() {
+      _profilePhotoPath = saved;
+    });
+  }
 
   String _generateProfileId() {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -172,6 +188,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     MessageStatsStore.version.removeListener(_messageStatsListener);
     _idCtrl.dispose();
     super.dispose();
+  }
+
+  Future<ImageSource?> _choosePhotoSource() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickProfilePhoto() async {
+    final source = await _choosePhotoSource();
+    if (source == null) return;
+
+    final picked = await _picker.pickImage(source: source, imageQuality: 85);
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _profilePhotoPath = picked.path;
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_photoPrefsKey(_profile.email), picked.path);
   }
 
   List<PetCatalogItem> _ownedPets() {
@@ -463,6 +517,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _profileCard() {
     final primary = Theme.of(context).colorScheme.primary;
     final isVerified = _profile.isVerified;
+    final hasPhoto =
+        _profilePhotoPath != null && File(_profilePhotoPath!).existsSync();
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -477,16 +533,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE1F4F0),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                            color: primary.withOpacity(0.2)),
+                    GestureDetector(
+                      onTap: _pickProfilePhoto,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE1F4F0),
+                              borderRadius: BorderRadius.circular(12),
+                              border:
+                                  Border.all(color: primary.withOpacity(0.2)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: hasPhoto
+                                  ? Image.file(
+                                      File(_profilePhotoPath!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Icon(Icons.person,
+                                      size: 28, color: primary),
+                            ),
+                          ),
+                          Positioned(
+                            right: -6,
+                            bottom: -6,
+                            child: Material(
+                              color: Colors.white,
+                              shape: const CircleBorder(),
+                              elevation: 1,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: _pickProfilePhoto,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4),
+                                  child: Icon(Icons.camera_alt,
+                                      size: 16, color: primary),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      child: Icon(Icons.person, size: 28, color: primary),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _pickProfilePhoto,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 34),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        textStyle: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                      icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+                      label: const Text('Add photo'),
                     ),
                     const SizedBox(height: 6),
                     Row(
@@ -519,7 +623,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                  if (isVerified)
+                    if (isVerified)
                       _verifiedChip(label: 'Verified', color: primary)
                     else
                       _verifiedChip(
@@ -545,18 +649,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                          _profile.city.isEmpty ? 'Unknown' : _profile.city,
-                          style: const TextStyle(color: Colors.black54),
-                        ),
+                              _profile.city.isEmpty ? 'Unknown' : _profile.city,
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Change location',
+                            onPressed: _pickLocation,
+                            icon: const Icon(Icons.location_on, size: 18),
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
                       ),
-                      IconButton(
-                        tooltip: 'Change location',
-                        onPressed: _pickLocation,
-                        icon: const Icon(Icons.location_on, size: 18),
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ],
-                  ),
                       const SizedBox(height: 4),
                       Text(_profile.email,
                           style: const TextStyle(
@@ -653,7 +757,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final chartUsed = callPts + msgPts + listPts;
     final pointsLeft = _availablePoints.clamp(0, 1000000);
 
-  final xLabels = _xLabelsForRange(_pointsRange);
+    final xLabels = _xLabelsForRange(_pointsRange);
     final primary = Theme.of(context).colorScheme.primary;
     final series = _seriesFromPoints(
       callPts,
@@ -697,13 +801,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 8),
             _graphLegend(series),
             const SizedBox(height: 12),
-            _summaryRow('Total used', '${_spentPoints} pts',
-                primary: primary),
+            _summaryRow('Total used', '${_spentPoints} pts', primary: primary),
             _summaryRow('Points left', '$pointsLeft pts',
                 primary: primary, emphasize: true),
             const SizedBox(height: 6),
-            _summaryRow('Chart est. used', '$chartUsed pts',
-                primary: primary),
+            _summaryRow('Chart est. used', '$chartUsed pts', primary: primary),
           ],
         ),
       ),
@@ -882,8 +984,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         _usageRow('Call', PlanStore.costFor(PlanAction.call), primary),
         _usageRow('Chat', PlanStore.costFor(PlanAction.chat), primary),
-        _usageRow(
-            'WhatsApp', PlanStore.costFor(PlanAction.whatsapp), primary),
+        _usageRow('WhatsApp', PlanStore.costFor(PlanAction.whatsapp), primary),
         _usageRow(
             'Add pet (after 5)', PlanStore.costFor(PlanAction.addPet), primary),
       ],
@@ -975,8 +1076,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Expanded(child: Text(label)),
           Text('$cost pts',
-              style:
-                  TextStyle(fontWeight: FontWeight.w600, color: primary)),
+              style: TextStyle(fontWeight: FontWeight.w600, color: primary)),
         ],
       ),
     );

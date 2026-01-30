@@ -46,7 +46,7 @@ class PetDetailsScreen extends StatelessWidget {
 
               Row(children: [
 
-                Text('₹${item.price}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                Text('?${item.price}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
 
                 const Spacer(),
 
@@ -138,6 +138,31 @@ class PetItem {
   final String location;
 
   final String description;
+  final DateTime? availableFrom;
+  final String? address;
+  final String? pincode;
+  final String? contactPreference;
+  final String? color;
+  final int ageYears;
+  final int ageMonths;
+  final String? gender;
+  final String? countType;
+  final String? sizeValue;
+  final String? sizeUnit;
+  final String? weightKg;
+  final bool negotiable;
+  final bool vaccinated;
+  final bool dewormed;
+  final bool trained;
+  final bool deliveryAvailable;
+  final int pairCount;
+  final int pairTotalPrice;
+  final int groupMaleCount;
+  final int groupFemaleCount;
+  final int groupMalePrice;
+  final int groupFemalePrice;
+  final int groupTotalPets;
+  final int groupTotalPrice;
 
   final String? sellerName;
 
@@ -151,9 +176,34 @@ class PetItem {
     required this.price,
     required this.location,
     required this.description,
+    this.availableFrom,
+    this.address,
+    this.pincode,
+    this.contactPreference,
     this.sellerName,
     this.sellerPhone,
+    this.color,
+    this.ageYears = 0,
+    this.ageMonths = 0,
+    this.gender,
+    this.countType,
+    this.sizeValue,
+    this.sizeUnit,
+    this.weightKg,
+    this.negotiable = true,
+    this.vaccinated = false,
+    this.dewormed = false,
+    this.trained = false,
+    this.deliveryAvailable = false,
     this.vaccineDetails,
+    this.pairCount = 0,
+    this.pairTotalPrice = 0,
+    this.groupMaleCount = 0,
+    this.groupFemaleCount = 0,
+    this.groupMalePrice = 0,
+    this.groupFemalePrice = 0,
+    this.groupTotalPets = 0,
+    this.groupTotalPrice = 0,
   })  : images = List.unmodifiable(
             (images.isEmpty ? [kPetPlaceholderImage] : images)
                 .take(kMaxPetImages)
@@ -248,7 +298,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
   void _shareItem() {
     final lines = [
       widget.item.displayTitle,
-      'Price: ₹${widget.item.price}',
+      'Price: Rs ${widget.item.price}',
       'Location: ${widget.item.location}',
       if (widget.item.description.isNotEmpty) widget.item.description,
     ];
@@ -258,7 +308,7 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
   void _openShareSheet(BuildContext context) {
     final shareText = [
       widget.item.displayTitle,
-      'Price: ₹${widget.item.price}',
+      'Price: Rs ${widget.item.price}',
       'Location: ${widget.item.location}',
       if (widget.item.description.isNotEmpty) widget.item.description,
     ].join('\n');
@@ -326,10 +376,51 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
     }
   }
 
+  String _ageLabel(int years, int months) {
+    final y = years <= 0 ? null : '$years yr${years == 1 ? '' : 's'}';
+    final m = months <= 0 ? null : '$months mo${months == 1 ? '' : 's'}';
+    if (y == null && m == null) return '--';
+    if (y != null && m != null) return '$y $m';
+    return y ?? m ?? '--';
+  }
+
+  String _formatDate(DateTime dt) {
+    return '${dt.day.toString().padLeft(2, '0')}-'
+        '${dt.month.toString().padLeft(2, '0')}-'
+        '${dt.year}';
+  }
+
+  String _textOrDash(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.isEmpty ? '--' : trimmed;
+  }
+
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
     final seller = item.sellerName ?? 'Seller';
+    final (species, breed) = splitPetTitle(item.displayTitle);
+    final ageLabel = _ageLabel(item.ageYears, item.ageMonths);
+    final speciesLabel = _textOrDash(species);
+    final breedLabel = _textOrDash(breed);
+    final genderLabel = _textOrDash(item.gender);
+    final countLabel = _textOrDash(item.countType);
+    final colorLabel = _textOrDash(item.color);
+    final weightLabel = _textOrDash(item.weightKg);
+    final sizeLabel = _textOrDash(
+      (item.sizeValue ?? '').isNotEmpty
+          ? '${item.sizeValue} ${item.sizeUnit ?? ''}'.trim()
+          : '',
+    );
+    final contactLabel = _textOrDash(item.contactPreference);
+    final availableLabel =
+        item.availableFrom != null ? _formatDate(item.availableFrom!) : '--';
+    final addressLabel = [
+      if ((item.address ?? '').trim().isNotEmpty) item.address!.trim(),
+      if ((item.pincode ?? '').trim().isNotEmpty)
+        'PIN: ${item.pincode!.trim()}',
+    ].where((e) => e.isNotEmpty).join('\n');
+    final resolvedAddress = addressLabel.isEmpty ? '--' : addressLabel;
 
     return Scaffold(
       appBar: AppBar(
@@ -348,193 +439,341 @@ class _PetDetailsScreenState extends State<PetDetailsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          // Media carousel
+            // Media carousel
 
-          _PetMediaCarousel(item: item),
+            _PetMediaCarousel(item: item),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Title + price + location
+            // Title + price + location
 
-          Text(item.displayTitle,
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+            Text(item.displayTitle,
+                style:
+                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-          Row(
-            children: [
-              Text('₹${item.price}',
-                  style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.teal)),
-              const Spacer(),
-              const Icon(Icons.location_on, size: 16, color: Colors.grey),
-              const SizedBox(width: 4),
-              Text(item.location, style: const TextStyle(color: Colors.grey)),
-            ],
-          ),
+            Builder(builder: (context) {
+              final isGroup = item.countType == 'Group';
+              final isPair = item.countType == 'Pair';
+              final groupMale = item.groupMalePrice;
+              final groupFemale = item.groupFemalePrice;
+              final hasGroupPrices =
+                  isGroup && (groupMale > 0 || groupFemale > 0);
 
-          const SizedBox(height: 16),
+              if (hasGroupPrices) {
+                return Row(
+                  children: [
+                    _priceChip(
+                        Icons.male, groupMale > 0 ? 'Rs $groupMale' : '--'),
+                    const SizedBox(width: 8),
+                    _priceChip(Icons.female,
+                        groupFemale > 0 ? 'Rs $groupFemale' : '--'),
+                    const Spacer(),
+                    const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Text(item.location,
+                        style: const TextStyle(color: Colors.grey)),
+                  ],
+                );
+              }
 
-          // Seller section
+              final mainPrice =
+                  isPair ? 'Rs ${item.price} / pair' : 'Rs ${item.price}';
 
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
+              return Row(
                 children: [
-                  const CircleAvatar(radius: 22, child: Icon(Icons.person)),
+                  Text(mainPrice,
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal)),
+                  const Spacer(),
+                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(item.location,
+                      style: const TextStyle(color: Colors.grey)),
+                ],
+              );
+            }),
 
-                  const SizedBox(width: 12),
+            const SizedBox(height: 16),
 
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(seller,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
-                        if ((item.sellerPhone ?? '').isNotEmpty)
-                          Text(_maskedPhoneLabel(),
-                              style: const TextStyle(color: Colors.grey)),
-                      ],
+            // Seller section
+
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    const CircleAvatar(radius: 22, child: Icon(Icons.person)),
+
+                    const SizedBox(width: 12),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(seller,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w700)),
+                          if ((item.sellerPhone ?? '').isNotEmpty)
+                            Text(_maskedPhoneLabel(),
+                                style: const TextStyle(color: Colors.grey)),
+                        ],
+                      ),
                     ),
-                  ),
 
-                  // Contact Actions
+                    // Contact Actions
 
-                  _circleAction(
-                    tooltip: 'Chat',
-                    background: Colors.teal.shade600,
-                    icon: const Icon(Icons.chat_bubble,
-                        color: Colors.white, size: 20),
-                    onTap: () async {
-                      final allowed = await requirePlanPointsForTarget(
-                          context, PlanAction.chat, _usageKey('chat'));
-                      if (!allowed) return;
-                      if (!context.mounted) return;
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            sellerName: seller,
-                            sellerPhone: item.sellerPhone ?? '',
+                    _circleAction(
+                      tooltip: 'Chat',
+                      background: Colors.teal.shade600,
+                      icon: const Icon(Icons.chat_bubble,
+                          color: Colors.white, size: 20),
+                      onTap: () async {
+                        final allowed = await requirePlanPointsForTarget(
+                            context, PlanAction.chat, _usageKey('chat'));
+                        if (!allowed) return;
+                        if (!context.mounted) return;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatScreen(
+                              sellerName: seller,
+                              sellerPhone: item.sellerPhone ?? '',
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                  ),
+                        );
+                      },
+                    ),
 
-                  const SizedBox(width: 10),
+                    const SizedBox(width: 10),
 
-                  _circleAction(
-                    tooltip: 'Call',
-                    background: const Color(0xFF0A84FF),
-                    icon: const Icon(Icons.call, color: Colors.white, size: 20),
-                    onTap: () => _callSeller(context),
-                  ),
+                    _circleAction(
+                      tooltip: 'Call',
+                      background: const Color(0xFF0A84FF),
+                      icon:
+                          const Icon(Icons.call, color: Colors.white, size: 20),
+                      onTap: () => _callSeller(context),
+                    ),
 
-                  const SizedBox(width: 10),
+                    const SizedBox(width: 10),
 
-                  _circleAction(
-                    tooltip: 'WhatsApp',
-                    background: const Color(0xFF25D366),
-                    icon: Image.asset('assets/icons/whatsapp.png',
-                        width: 20, height: 20),
-                    onTap: () => _openWhatsApp(context),
+                    _circleAction(
+                      tooltip: 'WhatsApp',
+                      background: const Color(0xFF25D366),
+                      icon: Image.asset('assets/icons/whatsapp.png',
+                          width: 20, height: 20),
+                      onTap: () => _openWhatsApp(context),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // About / Description
+            _SectionCard(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Description',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.description.isNotEmpty ? item.description : '--',
+                    style: const TextStyle(fontSize: 14),
                   ),
                 ],
               ),
             ),
-          ),
 
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // About / Description
-
-          const Text('Description',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-
-          const SizedBox(height: 6),
-
-          Text(item.description),
-
-          const SizedBox(height: 16),
-
-          _ExpandableCard(
-            icon: Icons.pets,
-            title: 'Breed',
-            subtitle: 'As mentioned by seller',
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.pets),
-                title: Text(item.displayTitle),
-                subtitle: const Text('Breed provided by seller'),
+            const Text('Pet Details',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            _SectionCard(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _InfoTile(
+                    icon: Icons.pets,
+                    label: 'Species',
+                    value: speciesLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.badge_outlined,
+                    label: 'Breed',
+                    value: breedLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.cake_outlined,
+                    label: 'Age',
+                    value: ageLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.transgender,
+                    label: 'Gender',
+                    value: genderLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.groups_outlined,
+                    label: 'Count',
+                    value: countLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.palette_outlined,
+                    label: 'Color',
+                    value: colorLabel,
+                  ),
+                  if (item.countType == 'Pair') ...[
+                    _InfoTile(
+                      icon: Icons.all_inclusive,
+                      label: 'Pair count',
+                      value: item.pairCount > 0 ? '${item.pairCount}' : '--',
+                    ),
+                    _InfoTile(
+                      icon: Icons.currency_rupee,
+                      label: 'Pair total price',
+                      value: item.pairTotalPrice > 0
+                          ? 'Rs ${item.pairTotalPrice}'
+                          : '--',
+                    ),
+                  ],
+                  if (item.countType == 'Group') ...[
+                    _InfoTile(
+                      icon: Icons.male,
+                      label: 'Male count',
+                      value: item.groupMaleCount > 0
+                          ? '${item.groupMaleCount}'
+                          : '--',
+                    ),
+                    _InfoTile(
+                      icon: Icons.female,
+                      label: 'Female count',
+                      value: item.groupFemaleCount > 0
+                          ? '${item.groupFemaleCount}'
+                          : '--',
+                    ),
+                    _InfoTile(
+                      icon: Icons.format_list_numbered,
+                      label: 'Total pets',
+                      value: item.groupTotalPets > 0
+                          ? '${item.groupTotalPets}'
+                          : '--',
+                    ),
+                    _InfoTile(
+                      icon: Icons.price_change_outlined,
+                      label: 'Male price/pet',
+                      value: item.groupMalePrice > 0
+                          ? 'Rs ${item.groupMalePrice}'
+                          : '--',
+                    ),
+                    _InfoTile(
+                      icon: Icons.price_check_outlined,
+                      label: 'Female price/pet',
+                      value: item.groupFemalePrice > 0
+                          ? 'Rs ${item.groupFemalePrice}'
+                          : '--',
+                    ),
+                    _InfoTile(
+                      icon: Icons.summarize_outlined,
+                      label: 'Group total price',
+                      value: item.groupTotalPrice > 0
+                          ? 'Rs ${item.groupTotalPrice}'
+                          : '--',
+                    ),
+                  ],
+                  _InfoTile(
+                    icon: Icons.monitor_weight_outlined,
+                    label: 'Weight (kg)',
+                    value: weightLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.straighten,
+                    label: 'Size (approx.)',
+                    value: sizeLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.handshake_outlined,
+                    label: 'Negotiable',
+                    value: item.negotiable ? 'Yes' : 'No',
+                  ),
+                  _InfoTile(
+                    icon: Icons.local_shipping_outlined,
+                    label: 'Delivery available',
+                    value: item.deliveryAvailable ? 'Yes' : 'No',
+                  ),
+                  _InfoTile(
+                    icon: Icons.chat_bubble_outline,
+                    label: 'Contact via',
+                    value: contactLabel,
+                  ),
+                  _InfoTile(
+                    icon: Icons.event_available_outlined,
+                    label: 'Available from',
+                    value: availableLabel,
+                  ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _InfoTile(
+                      icon: Icons.place_outlined,
+                      label: 'Address',
+                      value: resolvedAddress,
+                      multiline: true,
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-          _ExpandableCard(
-            icon: Icons.cake,
-            title: 'Age',
-            subtitle: 'Owner to confirm',
-            children: const [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.cake),
-                title: Text('Age info'),
-                subtitle: Text('Ask seller for exact age'),
+            const Text('Health & Care',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            _SectionCard(
+              child: Column(
+                children: [
+                  _HealthRow(
+                    icon: Icons.vaccines_outlined,
+                    title: 'Vaccinated',
+                    subtitle: item.vaccinated ? 'Yes' : 'No',
+                  ),
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _textOrDash(item.vaccineDetails),
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black54),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  _HealthRow(
+                    icon: Icons.check_circle_outline,
+                    title: 'Dewormed',
+                    subtitle: item.dewormed ? 'Yes' : 'No',
+                  ),
+                  const Divider(height: 1),
+                  _HealthRow(
+                    icon: Icons.school_outlined,
+                    title: 'Trained',
+                    subtitle: item.trained ? 'Yes' : 'No',
+                  ),
+                ],
               ),
-            ],
-          ),
-
-          const SizedBox(height: 12),
-
-          _ExpandableCard(
-            icon: Icons.health_and_safety,
-            title: 'Health & Features',
-            subtitle: 'Details provided by seller',
-            children: [
-              const ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.check_circle_outline),
-                title: Text('Dewormed'),
-                subtitle: Text('Check with seller'),
-              ),
-              const Divider(height: 1),
-              const ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.school_outlined),
-                title: Text('Trained'),
-                subtitle: Text('Check with seller'),
-              ),
-              const Divider(height: 1),
-              const ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.local_shipping_outlined),
-                title: Text('Delivery available'),
-                subtitle: Text('Check with seller'),
-              ),
-              const Divider(height: 1),
-              const ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.health_and_safety),
-                title: Text('Vaccinated'),
-                subtitle: Text('See seller notes'),
-              ),
-              if ((item.vaccineDetails ?? '').isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(left: 16, bottom: 12),
-                  child: Text(item.vaccineDetails!,
-                      style: const TextStyle(color: Colors.black87)),
-                ),
-            ],
-          ),
+            ),
           ],
         ),
       ),
@@ -1170,34 +1409,6 @@ class _ShareTarget extends StatelessWidget {
   }
 }
 
-class _ExpandableCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final List<Widget> children;
-
-  const _ExpandableCard(
-      {required this.icon,
-      required this.title,
-      required this.subtitle,
-      required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-        childrenPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        children: children,
-      ),
-    );
-  }
-}
-
 class _NavButton extends StatelessWidget {
   final Alignment alignment;
   final IconData icon;
@@ -1223,6 +1434,152 @@ class _NavButton extends StatelessWidget {
             icon: Icon(icon, color: Colors.white),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _SectionCard(
+      {required this.child, this.padding = const EdgeInsets.all(12)});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Card(
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        child: Padding(padding: padding, child: child),
+      ),
+    );
+  }
+}
+
+class _InfoTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool multiline;
+
+  const _InfoTile(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      this.multiline = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: Colors.grey.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87)),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey.shade900,
+                  ),
+                  maxLines: multiline ? null : 2,
+                  overflow:
+                      multiline ? TextOverflow.visible : TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Widget _priceChip(IconData icon, String label) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: Colors.teal.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.teal.withOpacity(0.2)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: Colors.teal.shade700),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+              color: Colors.teal.shade800,
+              fontWeight: FontWeight.w700,
+              fontSize: 14),
+        )
+      ],
+    ),
+  );
+}
+
+class _HealthRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _HealthRow(
+      {required this.icon, required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: Colors.teal.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.teal.shade700, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.w700, fontSize: 14)),
+                const SizedBox(height: 2),
+                Text(subtitle,
+                    style:
+                        const TextStyle(color: Colors.black54, fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

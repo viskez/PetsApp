@@ -177,12 +177,20 @@ class _BuyTabState extends State<BuyTab> {
   }
 
   List<PetCatalogItem> get _filteredItems {
+    // Sort newest first (last added appears at top/left)
+    final sorted = List<PetCatalogItem>.of(_catalog)
+      ..sort((a, b) {
+        final da = a.addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final db = b.addedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return db.compareTo(da); // descending
+      });
+
     final searchSource =
         widget.searchQuery.isNotEmpty ? widget.searchQuery : _inlineQuery;
 
     final query = searchSource.trim().toLowerCase();
 
-    return _catalog.where((item) {
+    return sorted.where((item) {
       final (speciesRaw, breedRaw) = splitPetTitle(item.title);
 
       final species = speciesRaw.isEmpty ? item.title.trim() : speciesRaw;
@@ -266,8 +274,7 @@ class _BuyTabState extends State<BuyTab> {
             const Divider(height: 20),
             Expanded(
               child: refreshedItems.isEmpty
-                  ? const Center(
-                      child: Text('No pets matched these filters.'))
+                  ? const Center(child: Text('No pets matched these filters.'))
                   : _buildResults(refreshedItems),
             ),
           ],
@@ -774,9 +781,7 @@ class _MediaCountDots extends StatelessWidget {
                 height: size / 2.6,
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _ == activeIndex
-                        ? accent
-                        : const Color(0xFFBDBDBD)),
+                    color: _ == activeIndex ? accent : const Color(0xFFBDBDBD)),
               ),
             ),
           )
@@ -802,6 +807,33 @@ class _PetCardState extends State<_PetCard> {
   int _pageIndex = 0;
 
   bool get _hasPhone => widget.item.phone.trim().isNotEmpty;
+
+  String _priceLabel(PetCatalogItem item) {
+    final countType = item.countType?.trim().toLowerCase();
+
+    if (countType == 'pair') {
+      if (item.price > 0) return 'Rs ${item.price} / pair';
+      return 'Price not set';
+    }
+
+    if (countType == 'group') {
+      final male = item.groupMalePrice;
+      final female = item.groupFemalePrice;
+      if (male > 0 || female > 0) {
+        final parts = <String>[];
+        if (male > 0) parts.add('M Rs $male');
+        if (female > 0) parts.add('F Rs $female');
+        return parts.join(' • ');
+      }
+      if (item.groupTotalPrice > 0) {
+        return 'Group total: Rs ${item.groupTotalPrice}';
+      }
+      return 'Price not set';
+    }
+
+    if (item.price <= 0) return 'Price not set';
+    return 'Rs ${item.price}';
+  }
 
   List<_CardMedia> get _media {
     final images = widget.item.images;
@@ -900,7 +932,8 @@ class _PetCardState extends State<_PetCard> {
                       builder: (_, ids, __) {
                         final saved = ids.contains(widget.item.title);
                         return IconButton(
-                          onPressed: () => widget.wishlist.toggle(widget.item.title),
+                          onPressed: () =>
+                              widget.wishlist.toggle(widget.item.title),
                           tooltip: saved
                               ? 'Remove from wishlist'
                               : 'Add to wishlist',
@@ -935,7 +968,7 @@ class _PetCardState extends State<_PetCard> {
                   Row(
                     children: [
                       Text(
-                        '₹${widget.item.price}',
+                        _priceLabel(widget.item),
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Theme.of(context).colorScheme.primary,
@@ -997,9 +1030,8 @@ class _PetCardState extends State<_PetCard> {
                           _actionButton(
                             tooltip: 'WhatsApp',
                             color: const Color(0xFF25D366),
-                            onTap: _hasPhone
-                                ? () => _openWhatsApp(context)
-                                : null,
+                            onTap:
+                                _hasPhone ? () => _openWhatsApp(context) : null,
                             child: Image.asset(
                               'assets/icons/whatsapp.png',
                               width: 16,
@@ -1310,7 +1342,8 @@ class _PetListTile extends StatelessWidget {
                         _actionButton(
                           tooltip: 'WhatsApp',
                           color: const Color(0xFF25D366),
-                          onTap: _hasPhone ? () => _openWhatsApp(context) : null,
+                          onTap:
+                              _hasPhone ? () => _openWhatsApp(context) : null,
                           child: Image.asset(
                             'assets/icons/whatsapp.png',
                             width: 16,
